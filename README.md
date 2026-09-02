@@ -2,7 +2,12 @@
 
 **Hackathon Demo System — Build with Bharat 2.0**
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Render.com-00D9A5?style=for-the-badge&logo=render&logoColor=white)](https://asymptotes-defnse.onrender.com/)
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/shashwatkhandelwal-debug/Asymptotes_Build_with_Bharat2.0)
+
 A working end-to-end adaptive Proof-of-Work (PoW) defense system that protects CPU-expensive verification endpoints (e.g. cryptographic signature/PBKDF2/JWT validation) from algorithmic complexity attacks, while remaining completely invisible to legitimate users during standard operation and benign traffic surges.
+
+🌐 **Live Deployed Web Service:** [**https://asymptotes-defnse.onrender.com/**](https://asymptotes-defnse.onrender.com/)
 
 ---
 
@@ -64,25 +69,31 @@ In accordance with strict hackathon transparency:
 
 ---
 
-## 🚀 Quickstart & Running the Demo
+## 🚀 Accessing & Running the Demo
 
-### Prerequisites
+### 🌐 Live Cloud Deployment (Instant Access)
+Open the deployed dashboard directly:
+👉 [**https://asymptotes-defnse.onrender.com/**](https://asymptotes-defnse.onrender.com/)
+
+### 💻 Running Locally
+
+#### Prerequisites
 - Python 3.10+ (`fastapi`, `uvicorn`, `psutil`, `numpy`, `pydantic`)
 - Node.js 18+ & npm
 
-### 1. Start the Backend API & Telemetry Broadcaster
+#### 1. Start the Backend API & Telemetry Broadcaster
 ```bash
 # From repository root
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### 2. Start the Frontend Dashboard
+#### 2. Start the Frontend Dashboard
 ```bash
 # In another terminal window
 cd frontend
 npm run dev
 ```
-Open **http://localhost:3000** in your browser.
+Open **http://localhost:3000** (or **http://127.0.0.1:8000**) in your browser.
 
 ---
 
@@ -125,10 +136,10 @@ Open **http://localhost:3000** in your browser.
 
 ## 🧪 Automated Test Suite
 
-Run all automated unit tests to verify the core modules headless:
+Run all automated unit and integration tests to verify the core modules headless:
 
 ```bash
-# Run all tests
+# Run all test suites
 python -m tests.test_crypto
 python -m tests.test_pow
 python -m tests.test_classifier
