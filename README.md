@@ -7,11 +7,11 @@
 
 A working end-to-end adaptive Proof-of-Work (PoW) defense system that protects CPU-expensive verification endpoints (e.g. cryptographic signature/PBKDF2/JWT validation) from algorithmic complexity attacks, while remaining completely invisible to legitimate users during standard operation and benign traffic surges.
 
-🌐 **Live Deployed Web Service:** [**https://asymptotes-defnse.onrender.com/**](https://asymptotes-defnse.onrender.com/)
+**Live Deployed Web Service:** [https://asymptotes-defnse.onrender.com/](https://asymptotes-defnse.onrender.com/)
 
 ---
 
-## 🎯 The Problem It Solves
+## The Problem It Solves
 
 Cryptographic verification sits on the critical path of fintech APIs, authentication microservices, and blockchain nodes. An **algorithmic complexity attack** (Crosby-Wallach 2003, Bitcoin CVE-2010-5138) floods valid-looking but computationally heavy verification requests, pegging server CPU cores until response latencies breach SLA thresholds and drop legitimate traffic.
 
@@ -28,7 +28,7 @@ Cryptographic verification sits on the critical path of fintech APIs, authentica
 
 ---
 
-## 🏛️ System Architecture
+## System Architecture
 
 ```
 Incoming Requests
@@ -60,7 +60,7 @@ Incoming Requests
 
 ---
 
-## 📋 Honest Architectural Disclosures
+## Honest Architectural Disclosures
 
 In accordance with strict hackathon transparency:
 - **Classifier:** The classifier is a calibrated **rule-based / heuristic decision model** evaluated over synthetic telemetry metrics (CPU utilization %, endpoint concentration ratio, and latency degradation slope). It is **not deep learning** and is not trained on external real-world attack datasets.
@@ -69,35 +69,14 @@ In accordance with strict hackathon transparency:
 
 ---
 
-## 🚀 Accessing & Running the Demo
+## Live Cloud Deployment
 
-### 🌐 Live Cloud Deployment (Instant Access)
-Open the deployed dashboard directly:
-👉 [**https://asymptotes-defnse.onrender.com/**](https://asymptotes-defnse.onrender.com/)
-
-### 💻 Running Locally
-
-#### Prerequisites
-- Python 3.10+ (`fastapi`, `uvicorn`, `psutil`, `numpy`, `pydantic`)
-- Node.js 18+ & npm
-
-#### 1. Start the Backend API & Telemetry Broadcaster
-```bash
-# From repository root
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
-```
-
-#### 2. Start the Frontend Dashboard
-```bash
-# In another terminal window
-cd frontend
-npm run dev
-```
-Open **http://localhost:3000** (or **http://127.0.0.1:8000**) in your browser.
+Access the deployed dashboard directly:
+[https://asymptotes-defnse.onrender.com/](https://asymptotes-defnse.onrender.com/)
 
 ---
 
-## 🎤 Stage Presentation Walkthrough (Live Demo Guide)
+## Stage Presentation Walkthrough (Live Demo Guide)
 
 ### Step 1: Baseline Standby
 - Show the dashboard in **Baseline Traffic** mode.
@@ -134,12 +113,11 @@ Open **http://localhost:3000** (or **http://127.0.0.1:8000**) in your browser.
 
 ---
 
-## 🧪 Automated Test Suite
+## Automated Test Suite
 
 Run all automated unit and integration tests to verify the core modules headless:
 
 ```bash
-# Run all test suites
 python -m tests.test_crypto
 python -m tests.test_pow
 python -m tests.test_classifier
@@ -150,7 +128,7 @@ python -m tests.test_e2e_integration
 
 ---
 
-## 📊 Hardware Benchmark Results (Measured on Presentation Laptop)
+## Hardware Benchmark Results (Measured on Presentation Laptop)
 
 | Difficulty | Expected Hashes ($2^D$) | Average Client Solve Time | Server Verification Cost |
 | :--- | :--- | :--- | :--- |
