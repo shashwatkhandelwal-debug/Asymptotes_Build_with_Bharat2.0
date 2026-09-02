@@ -1,13 +1,9 @@
-"""
-Test Traffic Classifier and Time-to-Failure Predictor
-"""
 from backend.classifier import classifier, TrafficClassification
 from backend.time_to_failure import ttf_predictor
 
 def test_classifier_and_regression():
     print("=== Testing Traffic Classifier & Time-to-Failure Predictor ===")
 
-    # 1. Normal Traffic Profile
     normal_metrics = {
         "rps": 2.5,
         "crypto_rps": 0.5,
@@ -23,7 +19,6 @@ def test_classifier_and_regression():
     assert c_res["classification"] == TrafficClassification.NORMAL
     assert ttf_res["is_degrading"] is False
 
-    # 2. Benign Traffic Surge Profile (High RPS, low crypto concentration, sustainable CPU)
     surge_metrics = {
         "rps": 28.0,
         "crypto_rps": 3.0,
@@ -39,7 +34,6 @@ def test_classifier_and_regression():
     assert c_res["classification"] == TrafficClassification.BENIGN_SURGE
     assert ttf_res["is_degrading"] is False
 
-    # 3. Complexity Attack Profile (Pegged CPU, 90% crypto concentration, steep latency slope)
     attack_metrics = {
         "rps": 45.0,
         "crypto_rps": 42.0,
@@ -57,7 +51,6 @@ def test_classifier_and_regression():
     assert ttf_res["seconds_to_failure"] is not None
     assert ttf_res["seconds_to_failure"] > 0
 
-    # 4. Downstream / DB Stall Profile (High latency, flat/low CPU)
     stall_metrics = {
         "rps": 8.0,
         "crypto_rps": 1.0,

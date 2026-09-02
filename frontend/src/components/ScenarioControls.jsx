@@ -29,7 +29,6 @@ export default function ScenarioControls({ currentMode, onSetMode }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5">
-        {/* Trigger 1: Legitimate Spike */}
         <button
           onClick={() => onSetMode('BENIGN_SURGE')}
           className={`flex flex-col text-left p-3.5 rounded-xl border transition-all duration-200 group ${
@@ -56,7 +55,6 @@ export default function ScenarioControls({ currentMode, onSetMode }) {
           </div>
         </button>
 
-        {/* Trigger 2: Crypto-Exhaustion Attack */}
         <button
           onClick={() => onSetMode('COMPLEXITY_ATTACK')}
           className={`flex flex-col text-left p-3.5 rounded-xl border transition-all duration-200 group ${
@@ -83,7 +81,6 @@ export default function ScenarioControls({ currentMode, onSetMode }) {
           </div>
         </button>
 
-        {/* Trigger 3: Downstream DB Stall */}
         <button
           onClick={() => onSetMode('DOWNSTREAM_STALL')}
           className={`flex flex-col text-left p-3.5 rounded-xl border transition-all duration-200 group ${
@@ -110,7 +107,6 @@ export default function ScenarioControls({ currentMode, onSetMode }) {
           </div>
         </button>
 
-        {/* Baseline / Standby */}
         <button
           onClick={() => onSetMode('IDLE')}
           className={`flex flex-col text-left p-3.5 rounded-xl border transition-all duration-200 group ${

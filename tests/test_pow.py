@@ -1,6 +1,3 @@
-"""
-Test Proof-of-Work (Hashcash SHA-256) Mechanism and Hardware Timing
-"""
 import time
 from backend.pow_engine import PoWEngine, pow_engine
 
@@ -17,10 +14,8 @@ def test_pow_generation_and_solving():
         elapsed = (time.perf_counter() - start) * 1000.0
 
         print(f"Difficulty {bits:2d} bits | Solved in {solve_ms:6.2f}ms | Attempts: {attempts:6d} | Nonce: {nonce}")
-
         assert nonce is not None
 
-        # Verify on server
         is_valid, msg = pow_engine.verify_solution(
             challenge_id=challenge["challenge_id"],
             timestamp=challenge["timestamp"],
@@ -39,20 +34,18 @@ def test_tampered_challenge_rejection():
     challenge = pow_engine.generate_challenge(client_ip="192.168.1.50", forced_difficulty=8)
     nonce, _, _ = PoWEngine.solve_challenge(challenge)
 
-    # Tamper with IP
     is_valid, msg = pow_engine.verify_solution(
         challenge_id=challenge["challenge_id"],
         timestamp=challenge["timestamp"],
         difficulty_bits=8,
         salt=challenge["salt"],
-        client_ip="10.0.0.1",  # Altered IP
+        client_ip="10.0.0.1",
         signature=challenge["signature"],
         nonce=nonce
     )
     assert is_valid is False
     print(f"[PASS] Tampered IP correctly rejected: {msg}")
 
-    # Invalid nonce
     is_valid, msg = pow_engine.verify_solution(
         challenge_id=challenge["challenge_id"],
         timestamp=challenge["timestamp"],

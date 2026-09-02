@@ -1,32 +1,25 @@
-"""
-FastAPI Main Application.
-Provides REST APIs, WebSocket real-time telemetry streaming,
-and stage demo control endpoints for the Adaptive PoW Defense System.
-Also serves the built single-page frontend dashboard directly.
-"""
 import asyncio
 import json
 import time
 import os
 from contextlib import asynccontextmanager
-from typing import Dict, Any, Optional
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response, HTTPException, status
+from typing import Optional
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.config import config
 from backend.crypto_endpoint import perform_cpu_heavy_verification, perform_light_operation, perform_db_stall_operation
 from backend.telemetry import telemetry
-from backend.classifier import classifier, TrafficClassification
+from backend.classifier import classifier
 from backend.time_to_failure import ttf_predictor
-from backend.pow_engine import pow_engine, PoWEngine
+from backend.pow_engine import pow_engine
 from backend.ledger import ledger
 from backend.simulator import simulator
 from backend.middleware import AdaptivePoWMiddleware
 
-# WebSockets Connection Manager
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
@@ -54,7 +47,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# Background Telemetry & Classification Loop
 async def telemetry_broadcast_loop():
     while True:
         try:
@@ -62,17 +54,12 @@ async def telemetry_broadcast_loop():
             classification_res = classifier.classify(metrics)
             classification = classification_res["classification"].value
             
-            # Predict Time to Failure & Urgency
             ttf_res = ttf_predictor.predict(metrics, classification_res)
             urgency = ttf_res.get("urgency_score", 0.0)
 
-            # Update PoW Difficulty Dial
             active_difficulty = pow_engine.calculate_difficulty(classification, urgency)
-
-            # Check Ledger Integrity Status
             ledger_status = ledger.verify_chain()
 
-            # Package State for Real-Time Streaming
             state_payload = {
                 "type": "TELEMETRY_UPDATE",
                 "timestamp": time.time(),
@@ -102,18 +89,16 @@ async def telemetry_broadcast_loop():
             await manager.broadcast(state_payload)
         except asyncio.CancelledError:
             break
-        except Exception as e:
+        except Exception:
             pass
 
         await asyncio.sleep(config.METRICS_TICK_INTERVAL_SEC)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Start simulator and telemetry broadcaster
     simulator.start()
     broadcast_task = asyncio.create_task(telemetry_broadcast_loop())
     yield
-    # Shutdown
     broadcast_task.cancel()
     simulator.stop()
 
@@ -124,10 +109,8 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 1. Attach Adaptive PoW Interceptor Middleware
 app.add_middleware(AdaptivePoWMiddleware, protected_prefixes=("/api/verify-crypto",))
 
-# 2. Attach CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -136,23 +119,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ----------------- Request Models -----------------
 class CryptoVerifyRequest(BaseModel):
     payload: str = "crypto_transaction_token_sample"
     signature_hint: Optional[str] = ""
 
 class ModeRequest(BaseModel):
-    mode: str  # IDLE, BENIGN_SURGE, COMPLEXITY_ATTACK, DOWNSTREAM_STALL
+    mode: str
 
 class TamperRequest(BaseModel):
     block_index: int = 1
     new_status: str = "UNAUTHORIZED_ALTERATION"
 
-# ----------------- API Endpoints -----------------
-
 @app.get("/api/health")
 async def health_check():
-    """Non-DDoS light health endpoint."""
     res = perform_light_operation("health_check")
     return {
         "status": "ok",
@@ -163,7 +142,6 @@ async def health_check():
 
 @app.get("/api/data")
 async def get_data():
-    """Non-DDoS light data retrieval endpoint."""
     res = perform_light_operation("get_data_payload")
     return {
         "status": "success",
@@ -178,16 +156,11 @@ async def get_data():
 
 @app.get("/api/data/db-query")
 async def get_db_query_sim():
-    """Simulates database / downstream I/O latency stall."""
     res = await perform_db_stall_operation(delay_ms=250.0)
     return res
 
 @app.post("/api/verify-crypto")
 async def verify_crypto(req: CryptoVerifyRequest, request: Request):
-    """
-    CPU-Heavy verification endpoint protected by AdaptivePoWMiddleware.
-    If PoW is required, middleware verifies solution before this code is executed!
-    """
     client_ip = request.client.host if request.client else "127.0.0.1"
     current_diff = pow_engine.current_difficulty_bits
 
@@ -234,8 +207,6 @@ async def get_telemetry_snapshot():
         "ledger_status": ledger_status
     }
 
-# ----------------- Ledger Endpoints -----------------
-
 @app.get("/api/ledger/blocks")
 async def get_ledger_blocks(limit: int = 50, offset: int = 0):
     blocks = ledger.get_blocks(limit=limit, offset=offset)
@@ -259,8 +230,6 @@ async def reset_ledger():
     ledger.reset_demo_ledger()
     return {"status": "success", "message": "Demo ledger environment reset to genesis state."}
 
-# ----------------- Simulator Control Endpoints -----------------
-
 @app.post("/api/simulator/mode")
 async def set_simulator_mode(req: ModeRequest):
     simulator.set_mode(req.mode)
@@ -272,7 +241,6 @@ async def set_simulator_mode(req: ModeRequest):
 
 @app.post("/api/simulator/reset")
 async def reset_simulator_and_state():
-    """Master demo reset endpoint."""
     simulator.reset()
     return {
         "status": "success",
@@ -286,8 +254,6 @@ async def get_simulator_status():
         "is_running": simulator.is_running,
         "stats": simulator.stats
     }
-
-# ----------------- WebSocket Telemetry Stream -----------------
 
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry_endpoint(websocket: WebSocket):
@@ -309,7 +275,6 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
     except Exception:
         manager.disconnect(websocket)
 
-# ----------------- Static Frontend Hosting -----------------
 dist_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
 if os.path.exists(dist_dir):
     app.mount("/assets", StaticFiles(directory=os.path.join(dist_dir, "assets")), name="assets")

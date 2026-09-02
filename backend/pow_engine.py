@@ -1,13 +1,7 @@
-"""
-Dynamic Proof-of-Work (Hashcash SHA-256) Engine.
-Handles difficulty mapping with hysteresis, cryptographic challenge generation,
-server-side O(1) verification, and client-side solving.
-"""
 import hashlib
 import hmac
 import time
 import uuid
-import math
 from typing import Dict, Any, Tuple, Optional
 from backend.config import config
 from backend.classifier import TrafficClassification
@@ -21,28 +15,18 @@ class PoWEngine:
         self.max_bits = config.MAX_DIFFICULTY_BITS
 
     def calculate_difficulty(self, classification: str, urgency_score: float) -> int:
-        """
-        Maps classification and urgency to difficulty bits with smooth hysteresis.
-        - Benign surge or Normal => 0 bits (PoW completely OFF)
-        - Complexity Attack => Dynamic ramp from 8 to 16 bits based on urgency
-        """
         now = time.time()
 
         if classification != TrafficClassification.COMPLEXITY_ATTACK.value:
-            # Hysteresis decay: step down gradually if previously elevated
             if self.current_difficulty_bits > 0:
                 if now - self.last_adjustment_time >= 1.0:
                     self.current_difficulty_bits = max(0, self.current_difficulty_bits - 2)
                     self.last_adjustment_time = now
             return self.current_difficulty_bits
 
-        # For complexity attacks, map urgency (0.0 to 1.0) into [min_bits, max_bits]
-        # Urgency 0.0 -> min_bits (8 bits)
-        # Urgency 1.0 -> max_bits (16 bits)
         target_bits = int(self.min_bits + round(urgency_score * (self.max_bits - self.min_bits)))
         target_bits = max(self.min_bits, min(self.max_bits, target_bits))
 
-        # Ramp up immediately, ramp down with hysteresis
         if target_bits > self.current_difficulty_bits:
             self.current_difficulty_bits = target_bits
             self.last_adjustment_time = now
@@ -54,9 +38,6 @@ class PoWEngine:
         return self.current_difficulty_bits
 
     def generate_challenge(self, client_ip: str = "127.0.0.1", forced_difficulty: Optional[int] = None) -> Dict[str, Any]:
-        """
-        Generates a stateless, HMAC-signed Hashcash challenge token.
-        """
         difficulty = forced_difficulty if forced_difficulty is not None else self.current_difficulty_bits
         challenge_id = uuid.uuid4().hex
         timestamp = int(time.time())
@@ -85,30 +66,21 @@ class PoWEngine:
         signature: str,
         nonce: str
     ) -> Tuple[bool, str]:
-        """
-        Server-side O(1) single-hash check.
-        Validates challenge integrity, expiration, and Hashcash zero-bits proof.
-        """
-        # 1. Check expiration
         now = int(time.time())
         if now - timestamp > config.POW_EXPIRY_SECONDS:
             return False, "Challenge has expired"
 
-        # 2. Verify HMAC signature integrity
         expected_payload = f"{challenge_id}:{timestamp}:{difficulty_bits}:{salt}:{client_ip}"
         expected_sig = hmac.new(self.secret_key, expected_payload.encode('utf-8'), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(signature, expected_sig):
             return False, "Invalid challenge signature or tampered parameters"
 
-        # 3. If difficulty is 0, no proof needed
         if difficulty_bits == 0:
             return True, "Valid (Difficulty 0)"
 
-        # 4. Verify Hashcash SHA-256 proof: check leading zero bits
         candidate = f"{challenge_id}:{salt}:{nonce}".encode('utf-8')
         digest = hashlib.sha256(candidate).digest()
 
-        # Check leading zero bits
         zero_bits = self._count_leading_zero_bits(digest)
         if zero_bits < difficulty_bits:
             return False, f"Insufficient PoW: found {zero_bits} zero bits, required {difficulty_bits}"
@@ -128,10 +100,6 @@ class PoWEngine:
 
     @staticmethod
     def solve_challenge(challenge: Dict[str, Any], max_attempts: int = 2_000_000) -> Tuple[Optional[str], int, float]:
-        """
-        Client solver (Hashcash SHA-256 brute-force miner).
-        Returns: (solution_nonce, attempts_count, elapsed_time_ms)
-        """
         challenge_id = challenge["challenge_id"]
         salt = challenge["salt"]
         difficulty_bits = challenge["difficulty_bits"]
@@ -147,7 +115,6 @@ class PoWEngine:
             candidate = f"{prefix}{nonce_str}".encode('utf-8')
             digest = hashlib.sha256(candidate).digest()
 
-            # Fast check
             if PoWEngine._count_leading_zero_bits(digest) >= difficulty_bits:
                 elapsed_ms = (time.perf_counter() - start) * 1000.0
                 return nonce_str, nonce_int + 1, round(elapsed_ms, 2)

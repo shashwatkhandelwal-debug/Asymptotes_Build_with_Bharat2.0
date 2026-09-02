@@ -1,14 +1,9 @@
-"""
-Real-time instrumentation and telemetry collector.
-Maintains a thread-safe rolling sliding window of request latencies, CPU time,
-RPS, and endpoint concentration ratios for dynamic classification.
-"""
 import time
 import threading
 import psutil
 from collections import deque
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import numpy as np
 from backend.config import config
 
@@ -32,7 +27,6 @@ class TelemetryCollector:
         self.last_cpu_percent = 12.0
         self._lock = threading.Lock()
         
-        # Initialize psutil CPU reading
         try:
             psutil.cpu_percent(interval=None)
         except Exception:
@@ -85,10 +79,6 @@ class TelemetryCollector:
             self.records.popleft()
 
     def flush_metrics(self):
-        """
-        Clears all rolling telemetry history and reset metrics.
-        Used for instant demo resets between takes.
-        """
         with self._lock:
             self.records.clear()
             self.recent_logs.clear()
@@ -148,7 +138,6 @@ class TelemetryCollector:
         max_latency = float(np.max(latencies))
         mean_cpu_time = float(np.mean(cpu_times))
 
-        # Calculate latency slope (rate of latency degradation ms / sec)
         latency_slope = self._calculate_latency_slope(records_list)
 
         pow_issued = sum(1 for r in records_list if r.pow_required)
@@ -174,23 +163,19 @@ class TelemetryCollector:
         }
 
     def _calculate_latency_slope(self, records: List[RequestRecord]) -> float:
-        """
-        Fits a linear trend line (least squares) over timestamps and latencies
-        to measure degradation slope in ms / second.
-        """
         if len(records) < 5:
             return 0.0
 
         bins = {}
         for r in records:
-            bucket = round(r.timestamp * 2) / 2.0  # 0.5s bucket
+            bucket = round(r.timestamp * 2) / 2.0
             bins.setdefault(bucket, []).append(r.latency_ms)
 
         if len(bins) < 3:
             return 0.0
 
         sorted_times = sorted(bins.keys())
-        x = np.array(sorted_times) - sorted_times[0]  # relative seconds
+        x = np.array(sorted_times) - sorted_times[0]
         y = np.array([np.mean(bins[t]) for t in sorted_times])
 
         if np.std(x) == 0:

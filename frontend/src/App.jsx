@@ -52,7 +52,6 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const wsRef = useRef(null);
 
-  // Connect WebSocket
   useEffect(() => {
     let reconnectTimeout = null;
 
@@ -73,7 +72,6 @@ export default function App() {
           if (payload.type === 'TELEMETRY_UPDATE') {
             setTelemetryState(payload);
 
-            // Update time-series history
             const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             setHistory((prev) => {
               const next = [
@@ -90,7 +88,7 @@ export default function App() {
             });
           }
         } catch (e) {
-          console.error('WS Parse Error:', e);
+          console.error(e);
         }
       };
 
@@ -121,7 +119,7 @@ export default function App() {
         body: JSON.stringify({ mode })
       });
     } catch (e) {
-      console.error('Failed to set mode:', e);
+      console.error(e);
     }
   };
 
@@ -130,13 +128,12 @@ export default function App() {
       await fetch('/api/simulator/reset', { method: 'POST' });
       setHistory([]);
     } catch (e) {
-      console.error('Failed to reset demo:', e);
+      console.error(e);
     }
   };
 
   return (
     <div className="min-h-screen bg-[#070a10] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white pb-12">
-      {/* Top Header */}
       <Header
         isConnected={isConnected}
         classification={telemetryState.classification}
@@ -145,16 +142,13 @@ export default function App() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col gap-6 w-full">
-        {/* Stage Presentation Triggers */}
         <ScenarioControls
           currentMode={telemetryState.simulator?.mode || 'IDLE'}
           onSetMode={handleSetMode}
         />
 
-        {/* Structured Diagnostic Advisory (Displays if non-DDoS I/O bottleneck or attack occurs) */}
         <DiagnosticAdvisory classification={telemetryState.classification} />
 
-        {/* Hero Defense Metrics: Countdown, PoW Dial, Diagnostics */}
         <HeroDefenseMetrics
           metrics={telemetryState.metrics}
           classification={telemetryState.classification}
@@ -162,17 +156,13 @@ export default function App() {
           powState={telemetryState.pow_state}
         />
 
-        {/* Real-time Telemetry Charts */}
         <TelemetryCharts history={history} />
 
-        {/* Tamper-Evident Hash-Chained Audit Ledger */}
         <LedgerExplorer ledgerStatus={telemetryState.ledger_status} />
 
-        {/* Live Request Stream Terminal */}
         <RequestFeed recentLogs={telemetryState.metrics?.recent_logs} />
       </main>
 
-      {/* Footer with Honesty Disclosures */}
       <footer className="border-t border-slate-800/80 bg-slate-950/60 py-4 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 font-mono">
           <div>

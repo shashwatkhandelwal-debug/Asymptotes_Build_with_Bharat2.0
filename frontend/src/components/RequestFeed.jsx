@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, ShieldAlert, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Terminal } from 'lucide-react';
 
 export default function RequestFeed({ recentLogs }) {
   const logs = recentLogs || [];

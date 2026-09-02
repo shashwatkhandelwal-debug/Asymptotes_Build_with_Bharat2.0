@@ -1,27 +1,16 @@
-"""
-Stage Traffic Simulator.
-Generates synthetic traffic profiles for live presentation:
-1. Normal baseline traffic
-2. Legitimate distributed surge (high volume, low crypto concentration => 0 PoW)
-3. Cryptographic complexity exhaustion attack (heavy concentrated flood => PoW mitigation)
-4. Downstream database / I/O stall (high latency, 0 CPU => PoW suppressed with diagnostic advisory)
-"""
 import asyncio
 import time
 import random
 import uuid
 from typing import Dict, Any, Optional
-from backend.config import config
 from backend.telemetry import telemetry
-from backend.classifier import classifier
-from backend.time_to_failure import ttf_predictor
 from backend.pow_engine import pow_engine, PoWEngine
 from backend.crypto_endpoint import perform_cpu_heavy_verification, perform_light_operation, perform_db_stall_operation
 from backend.ledger import ledger
 
 class TrafficSimulator:
     def __init__(self):
-        self.mode: str = "IDLE"  # IDLE, BENIGN_SURGE, COMPLEXITY_ATTACK, DOWNSTREAM_STALL
+        self.mode: str = "IDLE"
         self.is_running: bool = False
         self.task: Optional[asyncio.Task] = None
         self.stats = {
@@ -44,11 +33,6 @@ class TrafficSimulator:
             self.task = None
 
     def reset(self):
-        """
-        Master Demo Reset:
-        Instantly resets simulator mode to IDLE, flushes telemetry rolling window,
-        resets PoW difficulty to 0, and resets audit ledger to Genesis state.
-        """
         self.set_mode("IDLE")
         self.stats = {
             "total_simulated": 0,
@@ -70,31 +54,27 @@ class TrafficSimulator:
         while self.is_running:
             try:
                 if self.mode == "IDLE":
-                    # 1-3 requests/sec across light endpoints
                     await self._simulate_normal_tick()
                     await asyncio.sleep(0.4)
 
                 elif self.mode == "BENIGN_SURGE":
-                    # 25-40 RPS spread across data & health endpoints, low crypto
-                    tasks = [self._simulate_surge_request() for _ in range( random.randint(8, 14) )]
+                    tasks = [self._simulate_surge_request() for _ in range(random.randint(8, 14))]
                     await asyncio.gather(*tasks)
                     await asyncio.sleep(0.3)
 
                 elif self.mode == "COMPLEXITY_ATTACK":
-                    # 30-50 RPS focused on crypto verification
-                    tasks = [self._simulate_attack_request() for _ in range( random.randint(10, 18) )]
+                    tasks = [self._simulate_attack_request() for _ in range(random.randint(10, 18))]
                     await asyncio.gather(*tasks)
                     await asyncio.sleep(0.2)
 
                 elif self.mode == "DOWNSTREAM_STALL":
-                    # 10-20 RPS hitting downstream DB stall endpoint (high latency, 0 CPU)
-                    tasks = [self._simulate_db_stall_request() for _ in range( random.randint(4, 8) )]
+                    tasks = [self._simulate_db_stall_request() for _ in range(random.randint(4, 8))]
                     await asyncio.gather(*tasks)
                     await asyncio.sleep(0.3)
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 await asyncio.sleep(0.5)
 
     async def _simulate_normal_tick(self):
@@ -130,7 +110,6 @@ class TrafficSimulator:
         self.stats["total_simulated"] += 1
 
     async def _simulate_surge_request(self):
-        # 85% light endpoints, 15% crypto endpoint
         is_crypto = random.random() < 0.15
         endpoint = "/api/verify-crypto" if is_crypto else random.choice(["/api/data", "/api/health", "/api/status", "/api/feed"])
         client_ip = f"10.0.{random.randint(1, 20)}.{random.randint(1, 250)}"
@@ -164,15 +143,11 @@ class TrafficSimulator:
         self.stats["total_simulated"] += 1
 
     async def _simulate_attack_request(self):
-        # Flood on /api/verify-crypto
         endpoint = "/api/verify-crypto"
         attacker_ip = f"45.33.{random.randint(10, 99)}.{random.randint(1, 254)}"
-
-        # Check current active PoW difficulty
         current_diff = pow_engine.current_difficulty_bits
 
         if current_diff == 0:
-            # No PoW active yet: Attack requests execute full heavy crypto and degrade CPU!
             start = time.perf_counter()
             res = await asyncio.to_thread(perform_cpu_heavy_verification, f"attack_sig_{uuid.uuid4().hex}")
             elapsed_ms = (time.perf_counter() - start) * 1000.0
@@ -187,16 +162,10 @@ class TrafficSimulator:
                 status_code=200
             )
         else:
-            # PoW is active: Attackers face dynamic Hashcash challenge
             challenge = pow_engine.generate_challenge(client_ip=attacker_ip)
-
-            # Attack bot behavior:
-            # 60% of attack bots refuse / fail to solve PoW and are immediately dropped at the gate!
-            # 40% attempt to solve PoW, incurring client-side computational mining delay.
             will_attempt_solve = (random.random() < 0.40)
 
             if not will_attempt_solve:
-                # Fast rejection: 0 CPU burned on verification!
                 telemetry.record_request(
                     endpoint=endpoint,
                     latency_ms=random.uniform(0.5, 2.0),
@@ -205,7 +174,7 @@ class TrafficSimulator:
                     pow_required=True,
                     pow_difficulty=current_diff,
                     pow_solved=False,
-                    status_code=428  # Precondition Required
+                    status_code=428
                 )
                 self.stats["blocked_attack_reqs"] += 1
                 ledger.append_entry(
@@ -216,7 +185,6 @@ class TrafficSimulator:
                     status="DROPPED_UNSOLVED"
                 )
             else:
-                # Solve the challenge in worker thread
                 nonce, attempts, solve_time_ms = await asyncio.to_thread(
                     PoWEngine.solve_challenge, challenge, max_attempts=500_000
                 )
@@ -251,7 +219,7 @@ class TrafficSimulator:
                         pow_required=True,
                         pow_difficulty=current_diff,
                         pow_solved=False,
-                        status_code=408  # Mining Timeout
+                        status_code=408
                     )
                     self.stats["blocked_attack_reqs"] += 1
 
@@ -260,8 +228,6 @@ class TrafficSimulator:
     async def _simulate_db_stall_request(self):
         endpoint = "/api/data/db-query"
         client_ip = f"172.16.{random.randint(1, 10)}.{random.randint(1, 200)}"
-        
-        # Incurs 250-320ms latency with ~0.0ms CPU time
         res = await perform_db_stall_operation(delay_ms=random.uniform(220.0, 320.0))
         telemetry.record_request(
             endpoint=endpoint,

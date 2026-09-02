@@ -1,9 +1,3 @@
-/**
- * Client-side Adaptive Proof-of-Work SDK.
- * Dispatches Hashcash SHA-256 puzzles to the dedicated Web Worker,
- * and wraps fetch() to transparently handle challenge-response handshakes.
- */
-
 let workerInstance = null;
 
 function getWorker() {
@@ -41,13 +35,9 @@ export function solvePoWChallenge(challenge) {
   });
 }
 
-/**
- * Enhanced fetch wrapper that transparently solves adaptive PoW challenges.
- */
 export async function fetchWithAdaptivePoW(url, options = {}) {
   const initialResponse = await fetch(url, options);
 
-  // If server demands PoW proof (HTTP 428 Precondition Required)
   if (initialResponse.status === 428) {
     const errorData = await initialResponse.json();
     const challenge = errorData.challenge;
@@ -56,10 +46,8 @@ export async function fetchWithAdaptivePoW(url, options = {}) {
       throw new Error("Received 428 but no challenge payload provided.");
     }
 
-    // Solve the challenge off-thread in the Web Worker
     const solveResult = await solvePoWChallenge(challenge);
 
-    // Re-issue request with X-PoW-* authentication headers
     const retryHeaders = {
       ...(options.headers || {}),
       'X-PoW-Nonce': solveResult.nonce,

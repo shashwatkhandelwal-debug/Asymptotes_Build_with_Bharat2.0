@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, ShieldAlert, ShieldCheck, Database, Wrench, Info } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, Database, Wrench, Info } from 'lucide-react';
 
 export default function DiagnosticAdvisory({ classification }) {
   const advisory = classification?.advisory;
@@ -10,7 +10,6 @@ export default function DiagnosticAdvisory({ classification }) {
 
   const isWarning = advisory.severity === 'WARNING';
   const isCritical = advisory.severity === 'CRITICAL';
-  const isInfo = advisory.severity === 'INFO';
 
   return (
     <div className={`rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 ${

@@ -1,21 +1,17 @@
 import React from 'react';
-import { Timer, Gauge, BrainCircuit, ShieldAlert, CheckCircle2, TrendingUp, AlertOctagon } from 'lucide-react';
+import { Timer, Gauge, BrainCircuit, CheckCircle2 } from 'lucide-react';
 
 export default function HeroDefenseMetrics({ metrics, classification, timeToFailure, powState }) {
   const ttf = timeToFailure || {};
   const pow = powState || {};
   const classData = classification || {};
   const diffBits = pow.difficulty_bits || 0;
-  const isAttack = classData.classification === 'COMPLEXITY_ATTACK';
-  const isSurge = classData.classification === 'BENIGN_SURGE';
 
-  // Format countdown
   const secondsLeft = ttf.seconds_to_failure;
   const isDegrading = ttf.is_degrading;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-      {/* 1. Time to SLA Failure Countdown */}
       <div className={`rounded-2xl border p-5 backdrop-blur-md relative overflow-hidden transition-all duration-300 ${
         isDegrading && secondsLeft < 10
           ? 'bg-rose-950/40 border-rose-500/60 shadow-xl shadow-rose-950/50 glow-rose'
@@ -62,7 +58,6 @@ export default function HeroDefenseMetrics({ metrics, classification, timeToFail
           {ttf.explanation || 'Real-time linear regression over latency degradation slope.'}
         </p>
 
-        {/* Urgency Progress Bar */}
         <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
           <div
             className={`h-full transition-all duration-300 ${
@@ -79,7 +74,6 @@ export default function HeroDefenseMetrics({ metrics, classification, timeToFail
         </div>
       </div>
 
-      {/* 2. Dynamic PoW Difficulty Dial */}
       <div className={`rounded-2xl border p-5 backdrop-blur-md relative overflow-hidden transition-all duration-300 ${
         diffBits > 0
           ? 'bg-cyan-950/30 border-cyan-500/50 shadow-xl shadow-cyan-950/40 glow-cyan'
@@ -115,9 +109,8 @@ export default function HeroDefenseMetrics({ metrics, classification, timeToFail
             : 'PoW disabled. Legitimate and surge traffic passes through with zero client computing delay.'}
         </p>
 
-        {/* Difficulty Scale Meter */}
         <div className="grid grid-cols-5 gap-1.5 mb-1.5">
-          {[0, 8, 10, 12, 16].map((level, idx) => (
+          {[0, 8, 10, 12, 16].map((level) => (
             <div
               key={level}
               className={`h-2 rounded transition-all duration-300 ${
@@ -138,7 +131,6 @@ export default function HeroDefenseMetrics({ metrics, classification, timeToFail
         </div>
       </div>
 
-      {/* 3. Real-Time Classifier Diagnostics */}
       <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 backdrop-blur-md shadow-xl flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between mb-3">

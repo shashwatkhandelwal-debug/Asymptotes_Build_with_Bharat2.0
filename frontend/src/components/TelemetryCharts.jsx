@@ -11,7 +11,7 @@ import {
   CartesianGrid,
   ReferenceLine
 } from 'recharts';
-import { Activity, Cpu, BarChart3 } from 'lucide-react';
+import { Activity, Cpu } from 'lucide-react';
 
 export default function TelemetryCharts({ history }) {
   const chartData = history && history.length > 0 ? history : [
@@ -20,7 +20,6 @@ export default function TelemetryCharts({ history }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-      {/* Chart 1: Latency vs SLA Timeout */}
       <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 backdrop-blur-md shadow-xl">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -55,7 +54,6 @@ export default function TelemetryCharts({ history }) {
         </div>
       </div>
 
-      {/* Chart 2: CPU Utilization & Crypto Concentration */}
       <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 backdrop-blur-md shadow-xl">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">

@@ -1,18 +1,8 @@
-"""
-Tamper-Evident Hash-Chained Audit Ledger.
-Stores every issued PoW challenge, solved proof, and dropped request in an append-only,
-cryptographically linked SQLite ledger.
-
-HONESTY NOTICE:
-This is a local hash-chained append-only audit log demonstrating cryptographic tamper-evidence.
-It is not a distributed consensus blockchain (no peer-to-peer gossip or mining consensus).
-"""
 import sqlite3
 import hashlib
 import time
 import os
-import json
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any
 
 class AuditLedger:
     def __init__(self, db_path: str = "backend/ledger.db"):
@@ -44,7 +34,6 @@ class AuditLedger:
             """)
             conn.commit()
 
-            # Insert Genesis block if empty
             cursor.execute("SELECT COUNT(*) as count FROM audit_ledger")
             count = cursor.fetchone()["count"]
             if count == 0:
@@ -96,10 +85,6 @@ class AuditLedger:
         nonce: str,
         status: str
     ) -> Dict[str, Any]:
-        """
-        Appends a new challenge event to the hash chain.
-        Cryptographically links to the latest block hash.
-        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT block_index, block_hash FROM audit_ledger ORDER BY block_index DESC LIMIT 1")
@@ -134,13 +119,6 @@ class AuditLedger:
             }
 
     def verify_chain(self) -> Dict[str, Any]:
-        """
-        Walks the entire ledger sequentially from Genesis block to latest block.
-        Verifies:
-        1. Every block's internal hash matches recomputed hash of its contents.
-        2. Every block's prev_hash matches the previous block's actual block_hash.
-        Returns detailed verification report.
-        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM audit_ledger ORDER BY block_index ASC")
@@ -157,7 +135,6 @@ class AuditLedger:
             expected_prev_hash = "0" * 64
 
             for i, block in enumerate(blocks):
-                # 1. Check previous hash linkage
                 if i > 0 and block["prev_hash"] != expected_prev_hash:
                     return {
                         "is_valid": False,
@@ -169,7 +146,6 @@ class AuditLedger:
                         "actual_prev_hash": block["prev_hash"]
                     }
 
-                # 2. Check internal block integrity
                 recomputed_hash = self._calculate_block_hash(
                     block["block_index"],
                     block["timestamp"],
@@ -203,17 +179,11 @@ class AuditLedger:
             }
 
     def tamper_block_for_demo(self, block_index: int, new_status: str = "TAMPERED_SOLVED") -> Dict[str, Any]:
-        """
-        Stage Demo Feature:
-        Intentionally alters a row in SQLite without updating the hash chain
-        to prove live tamper-detection on stage.
-        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM audit_ledger WHERE block_index = ?", (block_index,))
             target = cursor.fetchone()
             if not target:
-                # If block_index doesn't exist, tamper the latest non-genesis block
                 cursor.execute("SELECT * FROM audit_ledger ORDER BY block_index DESC LIMIT 1")
                 target = cursor.fetchone()
 
@@ -245,11 +215,6 @@ class AuditLedger:
             return [dict(row) for row in cursor.fetchall()]
 
     def reset_demo_ledger(self):
-        """
-        Stage Demo Reset:
-        Clears demo session logs and re-initializes Genesis block.
-        Framed explicitly as local demo environment reset.
-        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DROP TABLE IF EXISTS audit_ledger")

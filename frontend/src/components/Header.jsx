@@ -56,21 +56,17 @@ export default function Header({ isConnected, classification, powState, onResetD
           </div>
         </div>
 
-        {/* Status Center & Controls */}
         <div className="flex items-center flex-wrap gap-3">
-          {/* Classification Badge */}
           <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg border text-xs font-semibold font-mono transition-all duration-300 ${badge.color}`}>
             {badge.icon}
             <span>{badge.label}</span>
           </div>
 
-          {/* Connection Indicator */}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 font-mono">
             <Radio className={`w-3.5 h-3.5 ${isConnected ? 'text-emerald-400 animate-pulse' : 'text-rose-400'}`} />
             <span>{isConnected ? 'Telemetry 60fps' : 'Reconnecting...'}</span>
           </div>
 
-          {/* Demo Reset Button */}
           <button
             onClick={onResetDemo}
             title="Reset simulated traffic and demo ledger state"

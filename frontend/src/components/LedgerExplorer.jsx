@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Blocks, Link2, ShieldCheck, ShieldAlert, CheckCircle, AlertTriangle, RefreshCw, Lock, Bug } from 'lucide-react';
+import { Blocks, ShieldCheck, CheckCircle, AlertTriangle, RefreshCw, Bug } from 'lucide-react';
 
 export default function LedgerExplorer({ ledgerStatus }) {
   const [blocks, setBlocks] = useState([]);
   const [verificationReport, setVerificationReport] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [tamperTargetIndex, setTamperTargetIndex] = useState(1);
-  const [tamperMsg, setTamperMsg] = useState(null);
 
   const fetchBlocks = async () => {
     try {
@@ -15,7 +13,7 @@ export default function LedgerExplorer({ ledgerStatus }) {
       setBlocks(data.blocks || []);
       setVerificationReport(data.verification || null);
     } catch (e) {
-      console.error('Failed to fetch ledger:', e);
+      console.error(e);
     }
   };
 
@@ -32,7 +30,7 @@ export default function LedgerExplorer({ ledgerStatus }) {
       const data = await res.json();
       setVerificationReport(data);
     } catch (e) {
-      console.error('Verification error:', e);
+      console.error(e);
     } finally {
       setIsVerifying(false);
     }
@@ -41,28 +39,25 @@ export default function LedgerExplorer({ ledgerStatus }) {
   const handleSimulateTamper = async () => {
     try {
       const target = blocks.find(b => b.block_index > 0)?.block_index || 1;
-      const res = await fetch('/api/ledger/tamper', {
+      await fetch('/api/ledger/tamper', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ block_index: target, new_status: 'UNAUTHORIZED_ALTERATION' })
       });
-      const data = await res.json();
-      setTamperMsg(data.message);
       await fetchBlocks();
       await handleVerify();
     } catch (e) {
-      console.error('Tamper error:', e);
+      console.error(e);
     }
   };
 
   const handleResetDemoState = async () => {
     try {
       await fetch('/api/ledger/reset', { method: 'POST' });
-      setTamperMsg(null);
       await fetchBlocks();
       await handleVerify();
     } catch (e) {
-      console.error('Reset error:', e);
+      console.error(e);
     }
   };
 
@@ -70,7 +65,6 @@ export default function LedgerExplorer({ ledgerStatus }) {
 
   return (
     <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 backdrop-blur-md shadow-xl">
-      {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div>
           <div className="flex items-center gap-2">
@@ -84,7 +78,6 @@ export default function LedgerExplorer({ ledgerStatus }) {
           </p>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center flex-wrap gap-2.5">
           <button
             onClick={handleVerify}
@@ -98,7 +91,6 @@ export default function LedgerExplorer({ ledgerStatus }) {
           <button
             onClick={handleSimulateTamper}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-mono text-xs font-semibold shadow-lg shadow-rose-600/20 transition-all"
-            title="Simulate modifying a database record to prove cryptographic tamper-detection live on stage"
           >
             <Bug className="w-4 h-4" />
             <span>Simulate Block Tamper</span>
@@ -106,8 +98,7 @@ export default function LedgerExplorer({ ledgerStatus }) {
 
           <button
             onClick={handleResetDemoState}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs font-medium border border-slate-700 transition-all"
-            title="Reset local demo environment to genesis state"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs font-medium border border-slate-700 transition-all"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Demo Reset</span>
@@ -115,7 +106,6 @@ export default function LedgerExplorer({ ledgerStatus }) {
         </div>
       </div>
 
-      {/* Verification Status Banner */}
       <div className="my-4">
         {isChainValid ? (
           <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 text-xs font-mono">
@@ -147,7 +137,6 @@ export default function LedgerExplorer({ ledgerStatus }) {
         )}
       </div>
 
-      {/* Block Stream Table */}
       <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full text-left font-mono text-xs">
           <thead className="bg-slate-950/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">

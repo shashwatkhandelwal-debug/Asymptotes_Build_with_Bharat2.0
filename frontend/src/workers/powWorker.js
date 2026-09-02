@@ -1,9 +1,3 @@
-/**
- * Dedicated Web Worker for Non-Blocking Hashcash SHA-256 Solving.
- * Runs off the main UI thread so React chart rendering and UI controls remain 60 FPS smooth.
- */
-
-// Helper to count leading zero bits in Uint8Array digest
 function countLeadingZeroBits(bytes) {
   let count = 0;
   for (let i = 0; i < bytes.length; i++) {
@@ -40,7 +34,6 @@ self.onmessage = async (e) => {
 
   try {
     while (nonce < max_attempts) {
-      // Process in small async micro-batches to allow cancellation if needed
       for (let i = 0; i < batchSize && nonce < max_attempts; i++, nonce++) {
         const candidateStr = prefix + nonce;
         const candidateBytes = encoder.encode(candidateStr);
