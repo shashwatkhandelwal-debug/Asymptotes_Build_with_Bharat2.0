@@ -46,7 +46,7 @@ Incoming Requests
 └───────────────────────┬────────────────────────────────┘
                         │
        ┌────────────────┴────────────────┐
-        ▼                                  ▼
+       ▼                                 ▼
 ┌──────────────────────────┐    ┌──────────────────────────┐
 │ /api/verify-crypto       │    │ /api/data & /api/health  │
 │ Real PBKDF2/HMAC Workload│    │ Sub-millisecond Ops      │
