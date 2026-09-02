@@ -1,11 +1,12 @@
 """
-Real CPU-intensive cryptographic verification workload.
+Real CPU-intensive cryptographic verification workload and lightweight API baselines.
 Performs real PBKDF2 key derivation and HMAC signature verification
 to ensure genuine CPU consumption without artificial delays (sleep).
+Also includes mock database / downstream I/O stall simulator.
 """
 import hashlib
 import time
-import os
+import asyncio
 from typing import Dict, Any
 from backend.config import config
 
@@ -63,6 +64,29 @@ def perform_light_operation(payload: str) -> Dict[str, Any]:
     return {
         "verified": True,
         "digest": digest[:16],
+        "cpu_time_ms": round((end_cpu - start_cpu) * 1000.0, 2),
+        "wall_time_ms": round((end_wall - start_wall) * 1000.0, 2)
+    }
+
+async def perform_db_stall_operation(delay_ms: float = 280.0) -> Dict[str, Any]:
+    """
+    Simulates a downstream database / external microservice I/O stall.
+    Incurs high wall-clock latency while consuming virtually 0 CPU time.
+    Used to demonstrate the system's diagnostic ability to differentiate
+    algorithmic complexity DoS from internal I/O bottlenecks.
+    """
+    start_cpu = time.process_time()
+    start_wall = time.perf_counter()
+
+    # Asynchronous I/O wait (non-blocking event loop, 0 CPU)
+    await asyncio.sleep(delay_ms / 1000.0)
+
+    end_cpu = time.process_time()
+    end_wall = time.perf_counter()
+
+    return {
+        "status": "db_query_completed",
+        "records_fetched": 42,
         "cpu_time_ms": round((end_cpu - start_cpu) * 1000.0, 2),
         "wall_time_ms": round((end_wall - start_wall) * 1000.0, 2)
     }

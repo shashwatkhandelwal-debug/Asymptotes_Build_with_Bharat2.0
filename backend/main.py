@@ -17,13 +17,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.config import config
-from backend.crypto_endpoint import perform_cpu_heavy_verification, perform_light_operation
+from backend.crypto_endpoint import perform_cpu_heavy_verification, perform_light_operation, perform_db_stall_operation
 from backend.telemetry import telemetry
 from backend.classifier import classifier, TrafficClassification
 from backend.time_to_failure import ttf_predictor
 from backend.pow_engine import pow_engine, PoWEngine
 from backend.ledger import ledger
 from backend.simulator import simulator
+from backend.middleware import AdaptivePoWMiddleware
 
 # WebSockets Connection Manager
 class ConnectionManager:
@@ -123,6 +124,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# 1. Attach Adaptive PoW Interceptor Middleware
+app.add_middleware(AdaptivePoWMiddleware, protected_prefixes=("/api/verify-crypto",))
+
+# 2. Attach CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -135,15 +140,9 @@ app.add_middleware(
 class CryptoVerifyRequest(BaseModel):
     payload: str = "crypto_transaction_token_sample"
     signature_hint: Optional[str] = ""
-    pow_challenge_id: Optional[str] = None
-    pow_timestamp: Optional[int] = None
-    pow_difficulty_bits: Optional[int] = None
-    pow_salt: Optional[str] = None
-    pow_signature: Optional[str] = None
-    pow_nonce: Optional[str] = None
 
 class ModeRequest(BaseModel):
-    mode: str  # IDLE, BENIGN_SURGE, COMPLEXITY_ATTACK
+    mode: str  # IDLE, BENIGN_SURGE, COMPLEXITY_ATTACK, DOWNSTREAM_STALL
 
 class TamperRequest(BaseModel):
     block_index: int = 1
@@ -153,71 +152,45 @@ class TamperRequest(BaseModel):
 
 @app.get("/api/health")
 async def health_check():
+    """Non-DDoS light health endpoint."""
     res = perform_light_operation("health_check")
-    return {"status": "ok", "service": "Adaptive PoW Defense", "wall_time_ms": res["wall_time_ms"]}
+    return {
+        "status": "ok",
+        "service": "Adaptive PoW Defense Platform",
+        "wall_time_ms": res["wall_time_ms"],
+        "timestamp": time.time()
+    }
 
 @app.get("/api/data")
 async def get_data():
+    """Non-DDoS light data retrieval endpoint."""
     res = perform_light_operation("get_data_payload")
     return {
         "status": "success",
-        "data": {"account_id": "ACC-9921", "balance": 15420.50, "currency": "USD"},
+        "data": {
+            "account_id": "ACC-9921",
+            "balance": 15420.50,
+            "currency": "USD",
+            "status": "ACTIVE"
+        },
         "cpu_time_ms": res["cpu_time_ms"]
     }
 
+@app.get("/api/data/db-query")
+async def get_db_query_sim():
+    """Simulates database / downstream I/O latency stall."""
+    res = await perform_db_stall_operation(delay_ms=250.0)
+    return res
+
 @app.post("/api/verify-crypto")
 async def verify_crypto(req: CryptoVerifyRequest, request: Request):
+    """
+    CPU-Heavy verification endpoint protected by AdaptivePoWMiddleware.
+    If PoW is required, middleware verifies solution before this code is executed!
+    """
     client_ip = request.client.host if request.client else "127.0.0.1"
     current_diff = pow_engine.current_difficulty_bits
 
-    # If PoW is currently required
-    if current_diff > 0:
-        if not req.pow_nonce or not req.pow_challenge_id:
-            # Issue challenge response (HTTP 428 Precondition Required)
-            challenge = pow_engine.generate_challenge(client_ip=client_ip)
-            return JSONResponse(
-                status_code=status.HTTP_428_PRECONDITION_REQUIRED,
-                content={
-                    "error": "PoW Challenge Required",
-                    "detail": "Adaptive defense is active due to detected complexity attack.",
-                    "challenge": challenge
-                }
-            )
-
-        # Validate submitted PoW solution
-        is_valid, msg = pow_engine.verify_solution(
-            challenge_id=req.pow_challenge_id,
-            timestamp=req.pow_timestamp or 0,
-            difficulty_bits=req.pow_difficulty_bits or current_diff,
-            salt=req.pow_salt or "",
-            client_ip=client_ip,
-            signature=req.pow_signature or "",
-            nonce=req.pow_nonce
-        )
-
-        if not is_valid:
-            ledger.append_entry(
-                client_ip=client_ip,
-                difficulty_bits=current_diff,
-                challenge_id=req.pow_challenge_id,
-                nonce=req.pow_nonce,
-                status="FAILED_VERIFICATION"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"PoW verification failed: {msg}"
-            )
-
-        # PoW is valid! Log to ledger
-        ledger.append_entry(
-            client_ip=client_ip,
-            difficulty_bits=current_diff,
-            challenge_id=req.pow_challenge_id,
-            nonce=req.pow_nonce,
-            status="SOLVED"
-        )
-
-    # Execute heavy cryptographic verification
     start = time.perf_counter()
     result = await asyncio.to_thread(perform_cpu_heavy_verification, req.payload)
     elapsed_ms = (time.perf_counter() - start) * 1000.0
@@ -297,6 +270,15 @@ async def set_simulator_mode(req: ModeRequest):
         "message": f"Simulator mode updated to {simulator.mode}"
     }
 
+@app.post("/api/simulator/reset")
+async def reset_simulator_and_state():
+    """Master demo reset endpoint."""
+    simulator.reset()
+    return {
+        "status": "success",
+        "message": "Master demo reset complete: Telemetry flushed, ledger reset to Genesis, PoW difficulty set to 0."
+    }
+
 @app.get("/api/simulator/status")
 async def get_simulator_status():
     return {
@@ -315,8 +297,11 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             try:
                 msg = json.loads(data)
-                if msg.get("action") == "SET_MODE":
+                action = msg.get("action")
+                if action == "SET_MODE":
                     simulator.set_mode(msg.get("mode", "IDLE"))
+                elif action == "RESET":
+                    simulator.reset()
             except Exception:
                 pass
     except WebSocketDisconnect:

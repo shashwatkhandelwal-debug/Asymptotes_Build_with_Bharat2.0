@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import ScenarioControls from './components/ScenarioControls';
 import HeroDefenseMetrics from './components/HeroDefenseMetrics';
+import DiagnosticAdvisory from './components/DiagnosticAdvisory';
 import TelemetryCharts from './components/TelemetryCharts';
 import LedgerExplorer from './components/LedgerExplorer';
 import RequestFeed from './components/RequestFeed';
@@ -22,7 +23,8 @@ export default function App() {
     classification: {
       classification: 'NORMAL',
       confidence: 0.9,
-      rationale: 'System operating within normal operating envelopes.'
+      rationale: 'System operating within normal baseline envelope.',
+      advisory: null
     },
     time_to_failure: {
       is_degrading: false,
@@ -123,14 +125,10 @@ export default function App() {
     }
   };
 
-  const handleResetDemo = async () => {
+  const handleMasterReset = async () => {
     try {
-      await fetch('/api/simulator/mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'IDLE' })
-      });
-      await fetch('/api/ledger/reset', { method: 'POST' });
+      await fetch('/api/simulator/reset', { method: 'POST' });
+      setHistory([]);
     } catch (e) {
       console.error('Failed to reset demo:', e);
     }
@@ -143,7 +141,7 @@ export default function App() {
         isConnected={isConnected}
         classification={telemetryState.classification}
         powState={telemetryState.pow_state}
-        onResetDemo={handleResetDemo}
+        onResetDemo={handleMasterReset}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col gap-6 w-full">
@@ -152,6 +150,9 @@ export default function App() {
           currentMode={telemetryState.simulator?.mode || 'IDLE'}
           onSetMode={handleSetMode}
         />
+
+        {/* Structured Diagnostic Advisory (Displays if non-DDoS I/O bottleneck or attack occurs) */}
+        <DiagnosticAdvisory classification={telemetryState.classification} />
 
         {/* Hero Defense Metrics: Countdown, PoW Dial, Diagnostics */}
         <HeroDefenseMetrics
@@ -175,10 +176,10 @@ export default function App() {
       <footer className="border-t border-slate-800/80 bg-slate-950/60 py-4 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 font-mono">
           <div>
-            Adaptive Proof-of-Work Defense • Built for Bharat Hackathon 2.0
+            Adaptive Proof-of-Work Defense & Diagnostic Platform • Build with Bharat 2.0
           </div>
           <div>
-            Rule-Based Telemetry Classifier • Hashcash SHA-256 • Local Hash-Chained Ledger
+            Heuristic Telemetry Classifier • Hashcash SHA-256 Web Worker • Local Hash-Chained Ledger
           </div>
         </div>
       </footer>

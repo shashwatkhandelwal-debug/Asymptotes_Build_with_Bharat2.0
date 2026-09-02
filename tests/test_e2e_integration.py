@@ -1,7 +1,7 @@
 """
 End-to-End Integration Test Suite.
 Tests all REST endpoints, simulator triggers, PoW challenge/response gate,
-and ledger verification using FastAPI TestClient.
+downstream I/O stall diagnostic advisory, and master reset.
 """
 from fastapi.testclient import TestClient
 from backend.main import app
@@ -12,7 +12,7 @@ def test_full_system_e2e():
     print("=== Running Full System E2E Integration Test ===")
     client = TestClient(app)
 
-    # 1. Test Health & Data Endpoints
+    # 1. Test Baseline & Health Endpoints
     print("\n1. Testing Baseline Endpoints...")
     res = client.get("/api/health")
     assert res.status_code == 200
@@ -23,6 +23,11 @@ def test_full_system_e2e():
     assert res.status_code == 200
     assert res.json()["status"] == "success"
     print("   [PASS] /api/data -> 200 OK")
+
+    res = client.get("/api/data/db-query")
+    assert res.status_code == 200
+    assert res.json()["status"] == "db_query_completed"
+    print("   [PASS] /api/data/db-query -> 200 OK (DB Query Simulated)")
 
     # 2. Test Crypto Verification Endpoint (No PoW initially)
     print("\n2. Testing /api/verify-crypto when PoW is 0...")
@@ -40,55 +45,64 @@ def test_full_system_e2e():
     assert res.json()["current_mode"] == "BENIGN_SURGE"
     print("   [PASS] Simulator switched to BENIGN_SURGE")
 
-    # 4. Test Simulator Mode Transition: COMPLEXITY_ATTACK
-    print("\n4. Testing Simulator Mode: COMPLEXITY_ATTACK...")
+    # 4. Test Simulator Mode Transition: DOWNSTREAM_STALL
+    print("\n4. Testing Simulator Mode: DOWNSTREAM_STALL...")
+    res = client.post("/api/simulator/mode", json={"mode": "DOWNSTREAM_STALL"})
+    assert res.status_code == 200
+    assert res.json()["current_mode"] == "DOWNSTREAM_STALL"
+    print("   [PASS] Simulator switched to DOWNSTREAM_STALL")
+
+    # 5. Test Simulator Mode Transition: COMPLEXITY_ATTACK
+    print("\n5. Testing Simulator Mode: COMPLEXITY_ATTACK...")
     res = client.post("/api/simulator/mode", json={"mode": "COMPLEXITY_ATTACK"})
     assert res.status_code == 200
     assert res.json()["current_mode"] == "COMPLEXITY_ATTACK"
     print("   [PASS] Simulator switched to COMPLEXITY_ATTACK")
 
-    # 5. Test PoW Challenge Issuance & Verification Gate
-    print("\n5. Testing Adaptive PoW Gate under active difficulty...")
-    # Force difficulty to 8 bits for testing gate
+    # 6. Test PoW Challenge Issuance & Verification Gate (Middleware Interceptor)
+    print("\n6. Testing Adaptive PoW Gate under active difficulty...")
     pow_engine.current_difficulty_bits = 8
 
-    # Unauthenticated request without PoW should get 428 Precondition Required
+    # Request without headers should get 428 Precondition Required
     res = client.post("/api/verify-crypto", json={"payload": "unprotected_request"})
     assert res.status_code == 428
     challenge_data = res.json()["challenge"]
     assert challenge_data["difficulty_bits"] == 8
-    print("   [PASS] Unsolved request rejected with HTTP 428 and issued Hashcash challenge")
+    print("   [PASS] Unsolved request intercepted with HTTP 428 by AdaptivePoWMiddleware")
 
-    # Client solves the challenge
+    # Client solves challenge
     nonce, attempts, solve_ms = PoWEngine.solve_challenge(challenge_data)
     print(f"   [INFO] Solved 8-bit challenge in {solve_ms}ms ({attempts} attempts, nonce: {nonce})")
 
-    # Request with valid solved nonce should pass with 200 OK
-    res = client.post("/api/verify-crypto", json={
-        "payload": "protected_request",
-        "pow_challenge_id": challenge_data["challenge_id"],
-        "pow_timestamp": challenge_data["timestamp"],
-        "pow_difficulty_bits": challenge_data["difficulty_bits"],
-        "pow_salt": challenge_data["salt"],
-        "pow_signature": challenge_data["signature"],
-        "pow_nonce": nonce
-    })
+    # Request with X-PoW-* headers should pass
+    res = client.post(
+        "/api/verify-crypto",
+        json={"payload": "protected_request"},
+        headers={
+            "X-PoW-Nonce": nonce,
+            "X-PoW-Challenge-ID": challenge_data["challenge_id"],
+            "X-PoW-Timestamp": str(challenge_data["timestamp"]),
+            "X-PoW-Difficulty": str(challenge_data["difficulty_bits"]),
+            "X-PoW-Salt": challenge_data["salt"],
+            "X-PoW-Signature": challenge_data["signature"]
+        }
+    )
     assert res.status_code == 200
+    assert res.headers.get("X-PoW-Verified") == "true"
     assert res.json()["pow_solved"] is True
     print("   [PASS] Solved PoW request allowed through with HTTP 200 OK")
 
-    # Reset difficulty
     pow_engine.current_difficulty_bits = 0
 
-    # 6. Test Ledger Integrity Verification Endpoint
-    print("\n6. Testing Ledger Verification API...")
+    # 7. Test Ledger Integrity Verification Endpoint
+    print("\n7. Testing Ledger Verification API...")
     res = client.get("/api/ledger/verify")
     assert res.status_code == 200
     assert res.json()["is_valid"] is True
     print(f"   [PASS] /api/ledger/verify -> Chain Valid (Blocks: {res.json()['total_blocks']})")
 
-    # 7. Test Live Tamper Simulation Endpoint
-    print("\n7. Testing Live Tamper Simulation API...")
+    # 8. Test Live Tamper Simulation Endpoint
+    print("\n8. Testing Live Tamper Simulation API...")
     res = client.post("/api/ledger/tamper", json={"block_index": 1, "new_status": "MALICIOUS_TAMPER"})
     assert res.status_code == 200
 
@@ -97,18 +111,18 @@ def test_full_system_e2e():
     assert res.json()["is_valid"] is False
     print(f"   [PASS] Tampered block caught by verification API: {res.json()['message']}")
 
-    # 8. Test Demo Reset Endpoint
-    print("\n8. Testing Demo Reset API...")
-    res = client.post("/api/ledger/reset")
+    # 9. Test Master Demo Reset Endpoint
+    print("\n9. Testing Master Demo Reset API...")
+    res = client.post("/api/simulator/reset")
     assert res.status_code == 200
 
     res = client.get("/api/ledger/verify")
     assert res.json()["is_valid"] is True
     assert res.json()["total_blocks"] == 1
-    print("   [PASS] Demo ledger reset to clean Genesis state")
+    print("   [PASS] Master demo reset successfully restored Genesis state and cleared metrics")
 
-    # 9. Test Frontend Static Page Serving
-    print("\n9. Testing Frontend Static Hosting...")
+    # 10. Test Frontend Static Page Serving
+    print("\n10. Testing Frontend Static Hosting...")
     res = client.get("/")
     assert res.status_code == 200
     assert "<!doctype html>" in res.text.lower()

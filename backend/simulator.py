@@ -4,6 +4,7 @@ Generates synthetic traffic profiles for live presentation:
 1. Normal baseline traffic
 2. Legitimate distributed surge (high volume, low crypto concentration => 0 PoW)
 3. Cryptographic complexity exhaustion attack (heavy concentrated flood => PoW mitigation)
+4. Downstream database / I/O stall (high latency, 0 CPU => PoW suppressed with diagnostic advisory)
 """
 import asyncio
 import time
@@ -15,12 +16,12 @@ from backend.telemetry import telemetry
 from backend.classifier import classifier
 from backend.time_to_failure import ttf_predictor
 from backend.pow_engine import pow_engine, PoWEngine
-from backend.crypto_endpoint import perform_cpu_heavy_verification, perform_light_operation
+from backend.crypto_endpoint import perform_cpu_heavy_verification, perform_light_operation, perform_db_stall_operation
 from backend.ledger import ledger
 
 class TrafficSimulator:
     def __init__(self):
-        self.mode: str = "IDLE"  # IDLE, BENIGN_SURGE, COMPLEXITY_ATTACK
+        self.mode: str = "IDLE"  # IDLE, BENIGN_SURGE, COMPLEXITY_ATTACK, DOWNSTREAM_STALL
         self.is_running: bool = False
         self.task: Optional[asyncio.Task] = None
         self.stats = {
@@ -42,9 +43,26 @@ class TrafficSimulator:
             self.task.cancel()
             self.task = None
 
+    def reset(self):
+        """
+        Master Demo Reset:
+        Instantly resets simulator mode to IDLE, flushes telemetry rolling window,
+        resets PoW difficulty to 0, and resets audit ledger to Genesis state.
+        """
+        self.set_mode("IDLE")
+        self.stats = {
+            "total_simulated": 0,
+            "blocked_attack_reqs": 0,
+            "solved_reqs": 0,
+            "current_mode": "IDLE"
+        }
+        pow_engine.current_difficulty_bits = 0
+        telemetry.flush_metrics()
+        ledger.reset_demo_ledger()
+
     def set_mode(self, mode: str):
         mode = mode.upper()
-        if mode in ("IDLE", "BENIGN_SURGE", "COMPLEXITY_ATTACK"):
+        if mode in ("IDLE", "BENIGN_SURGE", "COMPLEXITY_ATTACK", "DOWNSTREAM_STALL"):
             self.mode = mode
             self.stats["current_mode"] = mode
 
@@ -68,6 +86,12 @@ class TrafficSimulator:
                     await asyncio.gather(*tasks)
                     await asyncio.sleep(0.2)
 
+                elif self.mode == "DOWNSTREAM_STALL":
+                    # 10-20 RPS hitting downstream DB stall endpoint (high latency, 0 CPU)
+                    tasks = [self._simulate_db_stall_request() for _ in range( random.randint(4, 8) )]
+                    await asyncio.gather(*tasks)
+                    await asyncio.sleep(0.3)
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -78,7 +102,6 @@ class TrafficSimulator:
         client_ip = f"192.168.1.{random.randint(10, 50)}"
 
         if endpoint == "/api/verify-crypto":
-            # Run in worker thread to not block event loop
             start = time.perf_counter()
             res = await asyncio.to_thread(perform_cpu_heavy_verification, "normal_token", iterations=8000)
             elapsed_ms = (time.perf_counter() - start) * 1000.0
@@ -185,7 +208,6 @@ class TrafficSimulator:
                     status_code=428  # Precondition Required
                 )
                 self.stats["blocked_attack_reqs"] += 1
-                # Log dropped challenge to ledger
                 ledger.append_entry(
                     client_ip=attacker_ip,
                     difficulty_bits=current_diff,
@@ -200,7 +222,6 @@ class TrafficSimulator:
                 )
 
                 if nonce:
-                    # Valid solution: executed with throttled arrival rate
                     res = await asyncio.to_thread(perform_cpu_heavy_verification, "solved_crypto_check", iterations=12000)
                     total_latency = solve_time_ms + res["wall_time_ms"]
                     telemetry.record_request(
@@ -214,7 +235,6 @@ class TrafficSimulator:
                         status_code=200
                     )
                     self.stats["solved_reqs"] += 1
-                    # Log solved challenge to ledger
                     ledger.append_entry(
                         client_ip=attacker_ip,
                         difficulty_bits=current_diff,
@@ -235,6 +255,24 @@ class TrafficSimulator:
                     )
                     self.stats["blocked_attack_reqs"] += 1
 
+        self.stats["total_simulated"] += 1
+
+    async def _simulate_db_stall_request(self):
+        endpoint = "/api/data/db-query"
+        client_ip = f"172.16.{random.randint(1, 10)}.{random.randint(1, 200)}"
+        
+        # Incurs 250-320ms latency with ~0.0ms CPU time
+        res = await perform_db_stall_operation(delay_ms=random.uniform(220.0, 320.0))
+        telemetry.record_request(
+            endpoint=endpoint,
+            latency_ms=res["wall_time_ms"],
+            cpu_time_ms=res["cpu_time_ms"],
+            client_ip=client_ip,
+            pow_required=False,
+            pow_difficulty=0,
+            pow_solved=False,
+            status_code=200
+        )
         self.stats["total_simulated"] += 1
 
 simulator = TrafficSimulator()

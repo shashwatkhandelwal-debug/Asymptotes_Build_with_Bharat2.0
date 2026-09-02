@@ -1,12 +1,13 @@
 """
 Real-time instrumentation and telemetry collector.
-Maintains a rolling sliding window of request latencies, CPU time,
+Maintains a thread-safe rolling sliding window of request latencies, CPU time,
 RPS, and endpoint concentration ratios for dynamic classification.
 """
 import time
+import threading
 import psutil
 from collections import deque
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import numpy as np
 from backend.config import config
@@ -28,7 +29,9 @@ class TelemetryCollector:
         self.window_seconds = window_seconds or config.TELEMETRY_WINDOW_SECONDS
         self.records: deque[RequestRecord] = deque()
         self.recent_logs: deque[Dict[str, Any]] = deque(maxlen=50)
-        self.last_cpu_percent = 0.0
+        self.last_cpu_percent = 12.0
+        self._lock = threading.Lock()
+        
         # Initialize psutil CPU reading
         try:
             psutil.cpu_percent(interval=None)
@@ -58,29 +61,46 @@ class TelemetryCollector:
             pow_solved=pow_solved,
             status_code=status_code
         )
-        self.records.append(record)
-        self.recent_logs.appendleft({
-            "id": f"{int(now * 1000)}-{len(self.records)}",
-            "timestamp": now,
-            "endpoint": endpoint,
-            "latency_ms": round(latency_ms, 2),
-            "cpu_time_ms": round(cpu_time_ms, 2),
-            "client_ip": client_ip,
-            "pow_difficulty": pow_difficulty,
-            "pow_solved": pow_solved,
-            "status": status_code
-        })
-        self._prune_old_records(now)
+        
+        with self._lock:
+            self.records.append(record)
+            self.recent_logs.appendleft({
+                "id": f"{int(now * 1000)}-{len(self.records)}",
+                "timestamp": now,
+                "endpoint": endpoint,
+                "latency_ms": round(latency_ms, 2),
+                "cpu_time_ms": round(cpu_time_ms, 2),
+                "client_ip": client_ip,
+                "pow_difficulty": pow_difficulty,
+                "pow_solved": pow_solved,
+                "status": status_code
+            })
+            self._prune_old_records_locked(now)
+
         return record
 
-    def _prune_old_records(self, current_time: float):
+    def _prune_old_records_locked(self, current_time: float):
         cutoff = current_time - self.window_seconds
         while self.records and self.records[0].timestamp < cutoff:
             self.records.popleft()
 
+    def flush_metrics(self):
+        """
+        Clears all rolling telemetry history and reset metrics.
+        Used for instant demo resets between takes.
+        """
+        with self._lock:
+            self.records.clear()
+            self.recent_logs.clear()
+            self.last_cpu_percent = 10.0
+
     def get_metrics(self) -> Dict[str, Any]:
         now = time.time()
-        self._prune_old_records(now)
+        
+        with self._lock:
+            self._prune_old_records_locked(now)
+            records_list = list(self.records)
+            logs_snapshot = list(self.recent_logs)[:15]
 
         try:
             current_cpu_pct = psutil.cpu_percent(interval=None)
@@ -89,7 +109,6 @@ class TelemetryCollector:
         except Exception:
             pass
 
-        records_list = list(self.records)
         total_reqs = len(records_list)
         effective_window = max(1.0, self.window_seconds)
         rps = round(total_reqs / effective_window, 2)
@@ -111,7 +130,7 @@ class TelemetryCollector:
                 "latency_slope": 0.0,
                 "pow_challenges_issued": 0,
                 "pow_challenges_solved": 0,
-                "recent_logs": list(self.recent_logs)[:15]
+                "recent_logs": logs_snapshot
             }
 
         latencies = [r.latency_ms for r in records_list]
@@ -151,19 +170,17 @@ class TelemetryCollector:
             "latency_slope": round(latency_slope, 3),
             "pow_challenges_issued": pow_issued,
             "pow_challenges_solved": pow_solved,
-            "recent_logs": list(self.recent_logs)[:15]
+            "recent_logs": logs_snapshot
         }
 
     def _calculate_latency_slope(self, records: List[RequestRecord]) -> float:
         """
-        Fits a simple linear trend line (least squares) over timestamps and latencies
+        Fits a linear trend line (least squares) over timestamps and latencies
         to measure degradation slope in ms / second.
         """
         if len(records) < 5:
             return 0.0
 
-        # Bin by 500ms intervals to smooth jitter
-        now = time.time()
         bins = {}
         for r in records:
             bucket = round(r.timestamp * 2) / 2.0  # 0.5s bucket
@@ -176,7 +193,6 @@ class TelemetryCollector:
         x = np.array(sorted_times) - sorted_times[0]  # relative seconds
         y = np.array([np.mean(bins[t]) for t in sorted_times])
 
-        # Ordinary Least Squares slope
         if np.std(x) == 0:
             return 0.0
         slope, _ = np.polyfit(x, y, 1)
