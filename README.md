@@ -2,7 +2,7 @@
 
 **Team Asymptotes — Build with Bharat 2.0**
 
-[Live Demo](https://asymptotes-defnse.onrender.com/) · [Source](https://github.com/shashwatkhandelwal-debug/Asymptotes_Build_with_Bharat2.0)
+[Live Demo](https://asymptotes-defnse.onrender.com/) 
 
 A working, deployed system that defends CPU-expensive verification endpoints — signature checks, PBKDF2 hashing, JWT validation — against algorithmic complexity attacks, while staying completely invisible to legitimate users during normal traffic and genuine surges.
 
