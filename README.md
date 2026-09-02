@@ -133,6 +133,8 @@ python -m tests.test_crypto
 python -m tests.test_pow
 python -m tests.test_classifier
 python -m tests.test_ledger
+python -m tests.test_middleware
+python -m tests.test_e2e_integration
 ```
 
 ---
