@@ -36,26 +36,26 @@ Incoming Requests
        │
        ▼
 ┌────────────────────────────────────────────────────────┐
-│  Adaptive PoW Middleware & Sidecar                      │
-│                                                          │
-│  1. Telemetry Collector (psutil + per-request CPU ms)   │
-│  2. Heuristic Signal Classifier                          │
-│  3. Time-to-Failure Linear Regression                    │
-│  4. Dynamic Difficulty Mapper (0 – 16 bits)               │
-│  5. Hashcash SHA-256 Verifier (O(1) server check)         │
-└───────────────────────┬──────────────────────────────────┘
-                         │
-        ┌────────────────┴────────────────┐
+│  Adaptive PoW Middleware & Sidecar                     │
+│                                                        │
+│  1. Telemetry Collector (psutil + per-request CPU ms)  │
+│  2. Heuristic Signal Classifier                        │
+│  3. Time-to-Failure Linear Regression                  │
+│  4. Dynamic Difficulty Mapper (0 – 16 bits)            │
+│  5. Hashcash SHA-256 Verifier (O(1) server check)      │
+└───────────────────────┬────────────────────────────────┘
+                        │
+       ┌────────────────┴────────────────┐
         ▼                                  ▼
 ┌──────────────────────────┐    ┌──────────────────────────┐
-│ /api/verify-crypto        │    │ /api/data & /api/health   │
-│ Real PBKDF2/HMAC Workload │    │ Sub-millisecond Ops       │
+│ /api/verify-crypto       │    │ /api/data & /api/health  │
+│ Real PBKDF2/HMAC Workload│    │ Sub-millisecond Ops      │
 └──────────────────────────┘    └──────────────────────────┘
         │
         ▼
 ┌────────────────────────────────────────────────────────┐
-│ Tamper-Evident Hash-Chained Audit Ledger                │
-│ (Sequential SHA-256 Prev-Hash Chained SQLite Log)         │
+│ Tamper-Evident Hash-Chained Audit Ledger               │
+│ (Sequential SHA-256 Prev-Hash Chained SQLite Log)      │
 └────────────────────────────────────────────────────────┘
 ```
 
